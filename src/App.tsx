@@ -7,6 +7,7 @@ import Users from './pages/Users';
 import Signup from './pages/Signup';
 import Upload from './pages/Upload';
 import Frete from './pages/Frete';
+import Pedidos from './pages/Pedidos';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -40,6 +41,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Upload />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/pedidos"
+          element={
+            <ProtectedRoute>
+              <Pedidos />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { FreteRecord, FreteSummary, FreteSummaryByTransportadora } from '../types/frete';
+import type { FreteRecord, FreteSummary, FreteSummaryByTransportadora, FreteFilters, FreteSort } from '../types/frete';
 
 export const freteService = {
   // Buscar resumo por UF
@@ -229,6 +229,91 @@ export const freteService = {
     }
 
     return inserted;
+  },
+
+  // Buscar todos os registros com filtros e ordenação
+  getWithFilters: async (filters?: FreteFilters, sort?: FreteSort): Promise<FreteRecord[]> => {
+    let query = supabase.from('fretes').select('*');
+
+    // Aplicar filtros
+    if (filters) {
+      if (filters.uf && filters.uf.length > 0) {
+        query = query.in('uf', filters.uf);
+      }
+      if (filters.transportadora && filters.transportadora.length > 0) {
+        query = query.in('transportadora', filters.transportadora);
+      }
+      if (filters.freteMin !== undefined) {
+        query = query.gte('frete', filters.freteMin);
+      }
+      if (filters.freteMax !== undefined) {
+        query = query.lte('frete', filters.freteMax);
+      }
+      if (filters.prazoMin !== undefined) {
+        query = query.gte('prazo', filters.prazoMin);
+      }
+      if (filters.prazoMax !== undefined) {
+        query = query.lte('prazo', filters.prazoMax);
+      }
+      if (filters.cep) {
+        query = query.ilike('cep', `%${filters.cep}%`);
+      }
+    }
+
+    // Aplicar ordenação
+    if (sort) {
+      query = query.order(sort.field, { ascending: sort.order === 'asc' });
+    } else {
+      query = query.order('cep', { ascending: true });
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return (data || []).map((record) => ({
+      id: record.id,
+      cep: record.cep,
+      uf: record.uf,
+      transportadora: record.transportadora || 'Não informado',
+      frete: record.frete,
+      prazo: record.prazo,
+      created_at: record.created_at,
+    }));
+  },
+
+  // Obter lista de UFs únicas
+  getUniqueUFs: async (): Promise<string[]> => {
+    const { data, error } = await supabase
+      .from('fretes')
+      .select('uf')
+      .order('uf', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const uniqueUFs = Array.from(new Set((data || []).map((item) => item.uf)));
+    return uniqueUFs.sort();
+  },
+
+  // Obter lista de transportadoras únicas
+  getUniqueTransportadoras: async (): Promise<string[]> => {
+    const { data, error } = await supabase
+      .from('fretes')
+      .select('transportadora')
+      .order('transportadora', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const uniqueTransportadoras = Array.from(
+      new Set((data || []).map((item) => item.transportadora || 'Não informado'))
+    );
+    return uniqueTransportadoras.sort();
   },
 };
 

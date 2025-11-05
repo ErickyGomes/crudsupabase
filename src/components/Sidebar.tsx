@@ -4,6 +4,7 @@ import {
   IconUsers,
   IconTruck,
   IconLogout,
+  IconShoppingCart,
 } from '@tabler/icons-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -14,6 +15,7 @@ export default function Sidebar() {
   const menuItems = [
     { icon: IconUsers, label: 'Usuários', path: '/users' },
     { icon: IconTruck, label: 'Fretes', path: '/frete' },
+    { icon: IconShoppingCart, label: 'Pedidos', path: '/pedidos' },
   ];
 
   return (

@@ -47,11 +47,25 @@ Este projeto é um sistema completo de auditoria desenvolvido com React, TypeScr
    - Conversão automática para Parquet
    - Upload para Supabase Storage
    - Inserção automática no banco de dados
+   - Filtros dinâmicos (UF, Transportadora, Frete, Prazo, CEP)
+   - Ordenação personalizada (mais barato, mais rápido, etc.)
+   - Tabela pivot com CEPs nas linhas e Transportadoras nas colunas
+   - Cards que se ajustam conforme filtros aplicados
+   - Identificação automática de transportadora mais barata e mais rápida
+   - Exportação para Excel (XLSX)
    - Visualização resumida por UF (quantidade de CEPs, média de frete, média de prazo)
    - Visualização detalhada de todos os registros por UF
    - Exclusão de dados por UF
 
-5. **Proteção de Rotas**: Impede acesso às páginas sem estar autenticado
+5. **Sistema de Pedidos e Leilão de Fretes**:
+   - Upload de pedidos dos clientes via Excel
+   - Filtros por UF, CEP e Cliente
+   - Simulação de leilão de frete comparando transportadoras
+   - Tabela pivot mostrando resultados do leilão
+   - Identificação de vencedores (mais barato e mais rápido)
+   - Exportação completa dos resultados para Excel
+
+6. **Proteção de Rotas**: Impede acesso às páginas sem estar autenticado
 
 ---
 
@@ -90,6 +104,7 @@ auditoria/
 │   │   ├── Signup.tsx      # Tela de cadastro
 │   │   ├── Users.tsx       # Tela de gerenciamento de usuários
 │   │   ├── Frete.tsx       # Tela de gerenciamento de fretes
+│   │   ├── Pedidos.tsx     # Tela de pedidos e leilão de fretes
 │   │   └── Upload.tsx       # Tela de upload de arquivos
 │   ├── components/         # Componentes reutilizáveis
 │   │   ├── Sidebar.tsx     # Menu lateral de navegação
@@ -99,10 +114,12 @@ auditoria/
 │   ├── services/           # Serviços (lógica de negócio)
 │   │   ├── userService.ts  # Serviço para operações com usuários
 │   │   ├── freteService.ts # Serviço para operações com fretes
+│   │   ├── pedidoService.ts # Serviço para operações com pedidos e leilão
 │   │   └── uploadService.ts # Serviço para upload e processamento de arquivos
 │   ├── types/              # Definições de tipos TypeScript
 │   │   ├── user.ts         # Tipos relacionados a usuários
-│   │   └── frete.ts        # Tipos relacionados a fretes
+│   │   ├── frete.ts        # Tipos relacionados a fretes
+│   │   └── pedido.ts       # Tipos relacionados a pedidos
 │   ├── lib/                # Bibliotecas e configurações
 │   │   └── supabase.ts     # Configuração do cliente Supabase
 │   ├── App.tsx             # Componente principal com rotas
@@ -1292,6 +1309,137 @@ Para usar o sistema de fretes, você precisa:
 > 📖 **Guias Completos**: 
 > - `GUIA_FRETE.md` - Configuração do sistema de fretes
 > - `GUIA_PROCESSAMENTO_AUTOMATICO.md` - Processamento automático Excel → Parquet → Storage → Banco
+
+---
+
+## 🛒 Sistema de Pedidos e Leilão de Fretes
+
+### Visão Geral
+
+O sistema de Pedidos permite fazer upload de pedidos dos clientes e simular um leilão de frete, comparando todas as transportadoras disponíveis para encontrar a melhor opção (mais barata ou mais rápida) para cada pedido.
+
+### Funcionalidades
+
+**a) Upload de Pedidos:**
+- Upload de arquivo Excel com pedidos dos clientes
+- Suporte a variações de nomes de colunas
+- Validação de dados obrigatórios (CEP e UF)
+- Tabela com todos os pedidos carregados
+
+**b) Filtros:**
+- Filtro por UF (múltiplas seleções)
+- Filtro por CEP (busca parcial)
+- Filtro por Cliente (busca parcial)
+- Painel de filtros colapsável
+
+**c) Simulação de Leilão:**
+- Compara todas as transportadoras disponíveis para cada CEP
+- Identifica transportadora mais barata (menor frete)
+- Identifica transportadora mais rápida (menor prazo)
+- Tabela pivot mostrando resultados do leilão
+- Visualização clara dos vencedores com badges coloridos
+
+**d) Tabela Pivot do Leilão:**
+- Linhas: Pedidos (Pedido ID, Cliente, CEP, UF)
+- Colunas: Transportadoras
+- Células: Frete, Prazo, e indicadores visuais
+- Scroll horizontal para muitas transportadoras
+- Colunas fixas para identificação do pedido
+
+**e) Exportação:**
+- Exportação para Excel com duas planilhas:
+  - Planilha "Leilão": Tabela pivot com resultados
+  - Planilha "Detalhes": Todos os resultados detalhados
+
+### Estrutura de Dados
+
+#### Tabela `pedidos` no Supabase:
+
+```sql
+CREATE TABLE pedidos (
+  id UUID PRIMARY KEY,
+  cep TEXT NOT NULL,
+  uf TEXT NOT NULL,
+  pedido_id TEXT,
+  cliente TEXT,
+  created_at TIMESTAMP NOT NULL
+);
+```
+
+#### Formato do Excel para Pedidos:
+
+O sistema aceita variações de nomes de colunas:
+
+| Campo | Nomes Aceitos |
+|-------|---------------|
+| CEP | `cep`, `ceo`, `cep_destino`, `cep_dest` |
+| UF | `uf`, `estado`, `uf_destino`, `uf_dest` |
+| Pedido ID | `pedido_id`, `pedido`, `id_pedido`, `id` |
+| Cliente | `cliente`, `nome_cliente`, `cliente_nome` |
+
+**Nota:** CEP e UF são obrigatórios. Pedido ID e Cliente são opcionais.
+
+### Serviços Criados
+
+#### `pedidoService.ts`
+
+- `getAll()` - Busca todos os pedidos
+- `getWithFilters(filters)` - Busca pedidos com filtros aplicados
+- `simularLeilao(pedido)` - Simula leilão para um pedido específico
+  - Busca todos os fretes disponíveis para o CEP do pedido
+  - Agrupa por transportadora e identifica a melhor opção
+  - Retorna resultados com vencedores (mais barato e mais rápido)
+- `simularLeilaoMultiplos(pedidos)` - Simula leilão para múltiplos pedidos
+- `insertMany(pedidos)` - Insere múltiplos pedidos no banco
+- `deleteAll()` - Exclui todos os pedidos
+- `deleteByUF(uf)` - Exclui pedidos por UF
+
+### Como Funciona o Leilão
+
+1. **Para cada pedido:**
+   - Sistema busca todos os fretes disponíveis no banco que atendem o CEP do pedido
+   - Agrupa por transportadora, pegando o melhor frete (menor valor) de cada uma
+
+2. **Comparação:**
+   - Identifica qual transportadora tem o menor frete (mais barata)
+   - Identifica qual transportadora tem o menor prazo (mais rápida)
+   - Pode haver transportadoras que não atendem o CEP
+
+3. **Visualização:**
+   - Tabela pivot mostra todos os pedidos nas linhas
+   - Cada transportadora aparece em uma coluna
+   - Badges verdes indicam frete mais barato
+   - Badges azuis indicam prazo mais rápido
+   - Ícone X indica que a transportadora não atende
+
+### Configuração Necessária
+
+Para usar o sistema de pedidos, você precisa:
+
+1. **Criar tabela `pedidos`** no Supabase (veja `supabase/migrations/004_create_pedidos_table.sql`)
+2. **Ter dados de fretes** já cadastrados (para comparação)
+3. **Executar a migração SQL** para criar a tabela
+
+### Fluxo Completo de Leilão
+
+```
+1. Usuário faz upload de pedidos via Excel
+   ↓
+2. Pedidos são salvos no banco de dados
+   ↓
+3. Usuário aplica filtros (opcional)
+   ↓
+4. Usuário clica em "Simular Leilão"
+   ↓
+5. Para cada pedido:
+   - Sistema busca fretes disponíveis para o CEP
+   - Compara todas as transportadoras
+   - Identifica vencedores (mais barato e mais rápido)
+   ↓
+6. Resultados são exibidos na tabela pivot
+   ↓
+7. Usuário pode exportar para Excel
+```
 
 ### Fluxo Completo de Upload (Modo Automático)
 
